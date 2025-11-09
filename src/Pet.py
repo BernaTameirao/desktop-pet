@@ -292,13 +292,3 @@ class Pet(QLabel):
     def mouseReleaseEvent(self, event):
         self.drag_offset = None
         self.last_mouse_pos = None
-
-
-app = QApplication(sys.argv)
-pet = Pet(name="bulbasaur")
-pet.show()
-pet1 = Pet(name="charmander")
-pet1.show()
-pet2 = Pet(name="squirtle")
-pet2.show()
-sys.exit(app.exec_())
