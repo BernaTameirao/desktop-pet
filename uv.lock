@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyqt5", specifier = ">=5.15.11" }]
+requires-dist = [{ name = "pyqt5", specifier = ">=5.15.10" }]
 
 [[package]]
 name = "pyqt5"
