@@ -1,9 +1,7 @@
 [project]
 name = "desktop-pet"
 version = "0.1.0"
-description = "Add your description here"
+description = "A cute desktop pet application using PyQt5."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "pyqt5>=5.15.11",
-]
+dependencies = ["pyqt5>=5.15.10"]
