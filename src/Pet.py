@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QApplication, QLabel
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QTransform
 from PyQt5.QtCore import Qt, QTimer
 
+
 class Pet(QLabel):
     def __init__(self, name):
         super().__init__()
@@ -15,7 +16,9 @@ class Pet(QLabel):
         self.evolution_stage = 0
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.img_dir = os.path.join(base_dir, "../imgs")
-        self.image_path = os.path.join(self.img_dir, f"{self.name}_{self.evolution_stage}.png")
+        self.image_path = os.path.join(
+            self.img_dir, f"{self.name}_{self.evolution_stage}.png"
+        )
 
         # Pet state
         self.x, self.y = random.randint(500, 1500), random.randint(200, 400)
@@ -35,15 +38,23 @@ class Pet(QLabel):
         self._setup_screens()
 
     # ========== Setup ==========
-    
+
     def _load_image(self):
         self.original_pixmap = QPixmap(self.image_path)
         self.setPixmap(self.original_pixmap)
 
     def _setup_window(self):
         self.setGeometry(self.x, self.y, 128, 128)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        # Unique window title for each pet
+        self.setWindowTitle(f"Pet - {self.name.capitalize()}")
+        self.setWindowFlags(
+            Qt.FramelessWindowHint
+            | Qt.WindowStaysOnTopHint
+            | Qt.Tool
+            | Qt.WindowDoesNotAcceptFocus
+        )
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_AlwaysStackOnTop)
 
     def _setup_timers(self):
         self.timer = QTimer()
@@ -60,15 +71,15 @@ class Pet(QLabel):
         self.floor = area.bottom() - self.height() - 20
 
     # ========== Movement ==========
-    
+
     def _move_pet(self):
         """
         Main movement loop.
         """
-        
-        if self.drag_offset:  
+
+        if self.drag_offset:
             return
-    
+
         if not self._fall_pet():
             self._walk_pet()
 
@@ -102,9 +113,9 @@ class Pet(QLabel):
             # Its horizontal speed remains the same, to simulate inertia.
             self.vx = min(self.vx, 50)
             self.x += self.vx
-            
+
             return True
-            
+
         else:
             self.vy = 0
             self.vx = 2 * self.direction
@@ -116,17 +127,17 @@ class Pet(QLabel):
         """
         Makes the pet walk.
         """
-        
+
         if self.on_delay:
             return
-        
+
         self.walk_cycle += 1
         self.x += self.vx
-    
+
         # Smooth vertical motion (sinusoidal rocking)
         offset_y = 5 * math.sin(self.walk_cycle * 0.5)
         self.y = math.floor(self.floor + offset_y)
-        
+
         # Chance to change directions
         if random.random() < 0.005:
             self.direction *= -1
@@ -152,12 +163,12 @@ class Pet(QLabel):
         # Adds a random vertical speed to the pet.
         self.vy = random.randint(-30, -15)
         self.y += self.vy
-    
+
     def _cant_escape_bounds(self):
         """
         Prevents the pet from escaping the screen bounds.
         """
-        
+
         # Floor is determined by the bottom bound of which screen the pet is in.
         bounds = [screen.geometry() for screen in self.screens]
         for bound in bounds:
@@ -173,32 +184,34 @@ class Pet(QLabel):
         """
         Evolves the pet.
         """
-        
+
         self.on_delay = True
         iteration_counter = 0
-        
+
         def animate():
             nonlocal iteration_counter
-            
+
             iteration_counter += 1
 
             # The sprite is whiten to simulate evolution.
             self._whiten_image(alpha=200)
 
             # When the evolution is over
-            if iteration_counter >= 100:    
+            if iteration_counter >= 100:
                 self.timer.stop()
 
                 # Changes the pet sprite.
                 self.evolution_stage += 1
-                self.image_path = os.path.join(self.img_dir, f"{self.name}_{self.evolution_stage}.png")
+                self.image_path = os.path.join(
+                    self.img_dir, f"{self.name}_{self.evolution_stage}.png"
+                )
                 self._load_image()
 
                 # The original timer is run again.
                 self.timer.stop()
                 self.timer.timeout.disconnect()
                 self.timer.timeout.connect(self._move_pet)
-                self.timer.start(15) 
+                self.timer.start(15)
 
                 self.on_delay = False
 
@@ -207,13 +220,12 @@ class Pet(QLabel):
         self.timer.timeout.disconnect()
         self.timer.timeout.connect(animate)
         self.timer.start(15)
-        
 
     def _start_delay(self):
         """
         Put the pet in pause mode.
         """
-        
+
         self.on_delay = True
         delay_ms = random.randint(2000, 4000)  # between 2 and 4 seconds.
         self.delay_timer.start(delay_ms)
@@ -225,7 +237,7 @@ class Pet(QLabel):
         self.on_delay = False
 
     # ========== Visual effects ==========
-    
+
     def _flip_image(self):
         """
         Flips the image on the horizontal axis.
@@ -235,7 +247,7 @@ class Pet(QLabel):
         flipped_pixmap = self.pixmap().transformed(transform)
         self.setPixmap(flipped_pixmap)
 
-    def _whiten_image(self, alpha: int=200):
+    def _whiten_image(self, alpha: int = 200):
         """
         Whitens the image.
 
@@ -250,7 +262,7 @@ class Pet(QLabel):
         self.setPixmap(pixmap)
 
     # ========== Mouse events ==========
-    
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.drag_offset = event.pos()  # Click position within the pet.
@@ -266,10 +278,10 @@ class Pet(QLabel):
             if self.last_mouse_pos:
                 dx = global_pos.x() - self.last_mouse_pos.x()
                 dy = global_pos.y() - self.last_mouse_pos.y()
-    
+
                 self.vx = math.floor(dx)
                 self.vy = math.floor(dy)
-            
+
             self.last_mouse_pos = global_pos
 
             # Updates the pet position to the mouse position.
@@ -280,12 +292,3 @@ class Pet(QLabel):
     def mouseReleaseEvent(self, event):
         self.drag_offset = None
         self.last_mouse_pos = None
-
-app = QApplication(sys.argv)
-pet = Pet(name="bulbasaur")
-pet.show()
-pet1 = Pet(name="charmander")
-pet1.show()
-pet2 = Pet(name="squirtle")
-pet2.show()
-sys.exit(app.exec_())
