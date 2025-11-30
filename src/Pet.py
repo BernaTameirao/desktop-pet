@@ -2,10 +2,11 @@ import sys
 import random
 import math
 import os
-from PyQt5.QtWidgets import QApplication, QLabel
+from PyQt5.QtWidgets import QApplication, QLabel, QMenu, QAction
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QTransform
 from PyQt5.QtCore import Qt, QTimer
 
+from InfoWindow import InfoWindow
 
 class Pet(QLabel):
     def __init__(self, name):
@@ -21,37 +22,48 @@ class Pet(QLabel):
         )
 
         # Pet state
-        self.x, self.y = random.randint(500, 1500), random.randint(200, 400)
-        self.vx, self.vy = -2, 0
-        self.direction = -1
+        self.pos_x, self.pos_y = random.randint(500, 1500), random.randint(200, 400)
+        self.direction = random.choice([1, -1])
+        self.vx, self.vy = random.randint(0, 3)*self.direction, 0
+        self.level = 5
         self.walk_cycle = 0
+        self.manager = None
+
+        # Flags / Utility
         self.drag_offset = None
         self.last_mouse_pos = None
-        self.is_paused = False
+        self.on_delay = False
         self.is_walking = False
-        self.level = 5
+        self.in_battle = False
 
         # Initial configuration
         self._load_image()
         self._setup_window()
         self._setup_timers()
         self._setup_screens()
+        self._create_context_menu()
 
     # ========== Setup ==========
 
     def _load_image(self):
         self.original_pixmap = QPixmap(self.image_path)
-        self.setPixmap(self.original_pixmap)
+        pixmap = self.original_pixmap
+        
+        if self.direction == 1:
+            transform = QTransform()
+            transform.scale(-1, 1)
+            pixmap = pixmap.transformed(transform)
+        
+        self.setPixmap(pixmap)
 
     def _setup_window(self):
-        self.setGeometry(self.x, self.y, 128, 128)
+        self.setGeometry(self.pos_x, self.pos_y, 128, 128)
         # Unique window title for each pet
         self.setWindowTitle(f"Pet - {self.name.capitalize()}")
         self.setWindowFlags(
             Qt.FramelessWindowHint
             | Qt.WindowStaysOnTopHint
             | Qt.Tool
-            | Qt.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_AlwaysStackOnTop)
@@ -69,6 +81,33 @@ class Pet(QLabel):
         self.left, self.top = area.left(), area.top()
         self.right = area.right() - self.width()
         self.floor = area.bottom() - self.height() - 20
+
+    def _create_context_menu(self):
+        
+        # Loads the qss file
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        try:
+            with open(os.path.join(base_dir, "../stylesheets/menu.qss"), "r") as f:
+                menu_style = f.read()
+        except FileNotFoundError:
+            menu_style = ""
+    
+        # Creates the menu and stores it as an attribute
+        self.context_menu = QMenu(self)
+        self.context_menu.setStyleSheet(menu_style)
+    
+        # Creates actions
+        self.info_action = QAction("[   ⓘ   Info   ]", self)
+        self.close_action = QAction("[   ✖   Close  ]", self)
+    
+        # Connects actions
+        self.info_action.triggered.connect(self.show_info)
+        self.close_action.triggered.connect(self.close_pet)
+    
+        # Adds them to the menu
+        self.context_menu.addAction(self.info_action)
+        self.context_menu.addSeparator()
+        self.context_menu.addAction(self.close_action)
 
     # ========== Movement ==========
 
@@ -90,7 +129,7 @@ class Pet(QLabel):
                 self._evolve_pet()
 
         self._cant_escape_bounds()
-        self.move(self.x, self.y)
+        self.move(self.pos_x, self.pos_y)
 
     def _fall_pet(self):
         """
@@ -104,23 +143,20 @@ class Pet(QLabel):
             return False
 
         # If the pet is above the floor level, it will begin to fall.
-        if self.y < self.floor:
+        if self.pos_y < self.floor:
 
             # Its vertical speed will increase with each iteration, until it reaches terminal velocity.
             self.vy = min(self.vy + 1, 50)
-            self.y += self.vy
+            self.pos_y += self.vy
 
             # Its horizontal speed remains the same, to simulate inertia.
             self.vx = min(self.vx, 50)
-            self.x += self.vx
+            self.pos_x += self.vx
 
             return True
 
         else:
-            self.vy = 0
-            self.vx = 2 * self.direction
             self.is_walking = True
-            self.on_delay = False
             return False
 
     def _walk_pet(self):
@@ -128,15 +164,16 @@ class Pet(QLabel):
         Makes the pet walk.
         """
 
-        if self.on_delay:
+        if not self.is_walking or self.on_delay or self.in_battle:
             return
 
         self.walk_cycle += 1
-        self.x += self.vx
+        self.vx = 2 * self.direction
+        self.pos_x += self.vx
 
         # Smooth vertical motion (sinusoidal rocking)
         offset_y = 5 * math.sin(self.walk_cycle * 0.5)
-        self.y = math.floor(self.floor + offset_y)
+        self.pos_y = math.floor(self.floor + offset_y)
 
         # Chance to change directions
         if random.random() < 0.005:
@@ -145,24 +182,27 @@ class Pet(QLabel):
             self._flip_image()
 
         # Chance to pause (delay)
-        elif random.random() < 0.005:
+        elif random.random() < 0.002:
             self._start_delay()
 
         # Chance to jump
         elif random.random() < 0.001:
             self._jump_pet()
 
-    def _jump_pet(self):
+    def _jump_pet(self, min_height: int = -30, max_height: int = -15):
         """
         Makes the pet jump.
+
+        Parameters
+            min_height (int): minimum value.
+            max_height (int): maximum value.
         """
 
-        self.on_delay = True
         self.is_walking = False
 
         # Adds a random vertical speed to the pet.
-        self.vy = random.randint(-30, -15)
-        self.y += self.vy
+        self.vy = random.randint(min_height, max_height)
+        self.pos_y += self.vy
 
     def _cant_escape_bounds(self):
         """
@@ -172,34 +212,29 @@ class Pet(QLabel):
         # Floor is determined by the bottom bound of which screen the pet is in.
         bounds = [screen.geometry() for screen in self.screens]
         for bound in bounds:
-            if self.x >= bound.left() and self.x <= bound.right():
+            if self.pos_x >= bound.left() and self.pos_x <= bound.right():
                 self.floor = bound.bottom() - self.height() - 20
                 break
 
         # If beyond any of the limits, the pet is obstructed to go any further.
-        self.x = max(self.left, min(self.x, self.right))
-        self.y = max(self.top, min(self.y, self.floor))
+        self.pos_x = max(self.left, min(self.pos_x, self.right))
+        self.pos_y = max(self.top, min(self.pos_y, self.floor))
 
     def _evolve_pet(self):
         """
         Evolves the pet.
         """
 
-        self.on_delay = True
         iteration_counter = 0
+        # The sprite is whiten to simulate evolution.
+        self._color_image(r=255, g=255, b=255, alpha=200)
 
         def animate():
             nonlocal iteration_counter
-
             iteration_counter += 1
 
-            # The sprite is whiten to simulate evolution.
-            self._whiten_image(alpha=200)
-
             # When the evolution is over
-            if iteration_counter >= 100:
-                self.timer.stop()
-
+            if iteration_counter >= 300:
                 # Changes the pet sprite.
                 self.evolution_stage += 1
                 self.image_path = os.path.join(
@@ -208,33 +243,24 @@ class Pet(QLabel):
                 self._load_image()
 
                 # The original timer is run again.
-                self.timer.stop()
-                self.timer.timeout.disconnect()
-                self.timer.timeout.connect(self._move_pet)
-                self.timer.start(15)
-
-                self.on_delay = False
+                self.reset_timer(callback=self._move_pet, interval=15)
 
         # Starts a timer for the pet to evolve.
-        self.timer.stop()
-        self.timer.timeout.disconnect()
-        self.timer.timeout.connect(animate)
-        self.timer.start(15)
+        self.reset_timer(callback=animate, interval=15)
 
-    def _start_delay(self):
+    def lose_battle(self):
         """
-        Put the pet in pause mode.
+        Does the animation when losing a battle.
         """
 
-        self.on_delay = True
-        delay_ms = random.randint(2000, 4000)  # between 2 and 4 seconds.
-        self.delay_timer.start(delay_ms)
+        self._jump_pet(min_height=-20, max_height=-10)
+        self.vx = random.randint(10, 15) * -self.direction
 
-    def _end_delay(self):
+    def win_battle(self):
         """
-        Exit pause mode.
+        Does the animation when winning a battle.
         """
-        self.on_delay = False
+        self._jump_pet(min_height=-10, max_height=-10)
 
     # ========== Visual effects ==========
 
@@ -247,17 +273,20 @@ class Pet(QLabel):
         flipped_pixmap = self.pixmap().transformed(transform)
         self.setPixmap(flipped_pixmap)
 
-    def _whiten_image(self, alpha: int = 200):
+    def _color_image(self, r: int, g: int, b: int, alpha: int = 200):
         """
-        Whitens the image.
+        Colors the image.
 
         Parameters:
             alpha (int): Transparency.
+            r (int): Color red.
+            g (int): Color green.
+            b (int): Color blue.
         """
-        pixmap = self.original_pixmap.copy()
+        pixmap = self.pixmap().copy()
         painter = QPainter(pixmap)
         painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        painter.fillRect(pixmap.rect(), QColor(255, 255, 255, alpha))
+        painter.fillRect(pixmap.rect(), QColor(r, g, b, alpha))
         painter.end()
         self.setPixmap(pixmap)
 
@@ -285,10 +314,63 @@ class Pet(QLabel):
             self.last_mouse_pos = global_pos
 
             # Updates the pet position to the mouse position.
-            self.x = new_x
-            self.y = new_y
-            self.move(self.x, self.y)
+            self.pos_x = new_x
+            self.pos_y = new_y
+            self.move(self.pos_x, self.pos_y)
 
     def mouseReleaseEvent(self, event):
         self.drag_offset = None
         self.last_mouse_pos = None
+
+    
+    def contextMenuEvent(self, event):
+        self.context_menu.exec_(event.globalPos())
+
+    # ========== Utility Functions ==========
+
+    def reset_timer(self, callback, interval: int =15):
+        """
+        Resets the pet timer and connects a new callback.
+
+        Parameters:
+            callback: The new function that will be run every x seconds.
+            interval (int): The interval (in milliseconds).
+        """
+        self.timer.stop()
+        try:
+            self.timer.timeout.disconnect()
+        except TypeError:
+            pass
+    
+        self.timer.timeout.connect(callback)
+        self.timer.start(interval)
+
+    def _start_delay(self):
+        """
+        Put the pet in pause mode.
+        """
+
+        self.on_delay = True
+        delay_ms = random.randint(2000, 4000)  # between 2 and 4 seconds.
+        self.delay_timer.start(delay_ms)
+
+    def _end_delay(self):
+        """
+        Exit pause mode.
+        """
+        self.on_delay = False
+
+    def show_info(self):
+        """
+        Shows the pet info.
+        """
+        self.info_window = InfoWindow(pet=self)
+        self.info_window.show()
+
+    def close_pet(self):
+        """
+        Close the pet window, destroy it and remove it from the manager's pet list.
+        """
+        self.manager.remove_pet(pet=self)
+        self.close()      
+        self.deleteLater()  

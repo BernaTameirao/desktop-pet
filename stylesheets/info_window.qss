@@ -1,0 +1,23 @@
+QWidget {
+    background-color: #E3F2FD;
+    border: 2px solid #90A4B8;
+    border-radius: 12px;
+}
+
+QLabel {
+    color: #2D3A47;
+    font-size: 16px;
+    font-family: 'Segoe UI';
+}
+
+QPushButton {
+    background-color: #A7C7E7;
+    border: 2px solid #90A4B8;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+QPushButton:hover {
+    background-color: #CFE4F8;
+}
