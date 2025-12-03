@@ -1,5 +1,6 @@
 import time
 import random
+import math
 
 from PyQt5.QtCore import QTimer
 
